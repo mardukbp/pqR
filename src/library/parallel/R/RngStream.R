@@ -1,5 +1,7 @@
 #  File src/library/parallel/R/RngStream.R
-#  Part of the R package, http://www.R-project.org
+#  Part of the R package, https://www.R-project.org
+#
+#  Copyright (C) 1995-2017 The R Core Team
 #
 #  This program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -12,20 +14,20 @@
 #  GNU General Public License for more details.
 #
 #  A copy of the GNU General Public License is available at
-#  http://www.r-project.org/Licenses/
+#  https://www.R-project.org/Licenses/
 
 nextRNGStream <- function(seed)
 {
     if(!is.integer(seed) || seed[1L] %% 100L != 7L)
-        stop("invalid value of 'seed'")
-    .Call(C_nextStream, seed, PACKAGE = "parallel")
+	stop(gettextf("invalid value of %s", "'seed'"), domain = NA)
+    .Call(C_nextStream, seed)
 }
 
 nextRNGSubStream <- function(seed)
 {
     if(!is.integer(seed) || seed[1L] %% 100L != 7L)
-        stop("invalid value of 'seed'")
-    .Call(C_nextSubStream, seed, PACKAGE = "parallel")
+	stop(gettextf("invalid value of %s", "'seed'"), domain = NA)
+    .Call(C_nextSubStream, seed)
 }
 
 ## Different from snow's RNG code
@@ -60,7 +62,7 @@ RNGenv <- new.env()
 mc.reset.stream <- function() {
     if (RNGkind()[1L] == "L'Ecuyer-CMRG") {
         if (!exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE))
-            runif(1)
+            sample.int(1L)
         assign("LEcuyer.seed",
                get(".Random.seed", envir = .GlobalEnv, inherits = FALSE),
                envir = RNGenv)
@@ -74,7 +76,7 @@ mc.advance.stream <- function(reset = FALSE)
         if (reset ||
             !exists("LEcuyer.seed", envir = RNGenv, inherits = FALSE)) {
             if (!exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE))
-                runif(1)
+                sample.int(1L)
             assign("LEcuyer.seed",
                    get(".Random.seed", envir = .GlobalEnv, inherits = FALSE),
                    envir = RNGenv)

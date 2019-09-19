@@ -1,6 +1,6 @@
 /*
  *  R : A Computer Language for Statistical Data Analysis
- *  Copyright (C) 2011   The R Development Core Team.
+ *  Copyright (C) 2011   The R Core Team.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -14,7 +14,7 @@
  *
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, a copy is available at
- *  http://www.r-project.org/Licenses/
+ *  https://www.R-project.org/Licenses/
  */
 
 #include "parallel.h"
@@ -68,7 +68,7 @@ SEXP nextStream(SEXP x)
     }
     SEXP ans = allocVector(INTSXP, 7);
     INTEGER(ans)[0] = INTEGER(x)[0];
-    for (int i = 0;  i < 6; i++) INTEGER(ans)[i+1] = nseed[i];
+    for (int i = 0;  i < 6; i++) INTEGER(ans)[i+1] = (int) nseed[i];
     return ans;
 }
 
@@ -94,6 +94,6 @@ SEXP nextSubStream(SEXP x)
     }
     SEXP ans = allocVector(INTSXP, 7);
     INTEGER(ans)[0] = INTEGER(x)[0];
-    for (int i = 0;  i < 6; i++) INTEGER(ans)[i+1] = nseed[i];
+    for (int i = 0;  i < 6; i++) INTEGER(ans)[i+1] = (int) nseed[i];
     return ans;
 }

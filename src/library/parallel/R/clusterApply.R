@@ -1,7 +1,7 @@
 #  File src/library/parallel/R/clusterApply.R
-#  Part of the R package, http://www.R-project.org
+#  Part of the R package, https://www.R-project.org
 #
-#  Modifications for pqR Copyright (c) 2016 Radford M. Neal.
+#  Copyright (C) 1995-2016 The R Core Team
 #
 #  This program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -14,7 +14,7 @@
 #  GNU General Public License for more details.
 #
 #  A copy of the GNU General Public License is available at
-#  http://www.r-project.org/Licenses/
+#  https://www.R-project.org/Licenses/
 
 ## Derived from snow 0.3-6 by Luke Tierney
 
@@ -99,11 +99,11 @@ clusterMap <- function (cl = NULL, fun, ..., MoreArgs = NULL, RECYCLE = TRUE,
     args <- list(...)
     if (length(args) == 0) stop("need at least one argument")
     .scheduling <- match.arg(.scheduling)
-    n <- sapply(args, length)
+    n <- lengths(args)
     if (RECYCLE) {
         vlen <- max(n)
         if(vlen && min(n) == 0L)
-            stop("Zero-length inputs cannot be mixed with those of non-zero length")
+            stop("zero-length inputs cannot be mixed with those of non-zero length")
         if (!all(n == vlen))
             for (i in seq_along(args)) # why not lapply?
                 args[[i]] <- rep(args[[i]], length.out = vlen)
@@ -121,7 +121,7 @@ clusterMap <- function (cl = NULL, fun, ..., MoreArgs = NULL, RECYCLE = TRUE,
         else if (!is.null(names1))
             names(answer) <- names1
     }
-    if (!identical(SIMPLIFY, FALSE) && length(answer))
+    if (!isFALSE(SIMPLIFY) && length(answer))
         simplify2array(answer, higher = (SIMPLIFY == "array"))
     else answer
 }
@@ -138,11 +138,12 @@ clusterMap <- function (cl = NULL, fun, ..., MoreArgs = NULL, RECYCLE = TRUE,
 # while minimizing changes from the results produced by the definition
 # above.
 splitIndices <- function(nx, ncl) {
-    i <- 1L:nx
-    if (ncl == 1L || nx == 1L) i
+    i <- seq_len(nx)
+    if (ncl == 0L) list()
+    else if (ncl == 1L || nx == 1L) list(i)
     else {
         fuzz <- min((nx - 1L) / 1000, 0.4 * nx / ncl)
-        breaks <- seq(1 - fuzz, nx + fuzz, length = ncl + 1L)
+        breaks <- seq(1 - fuzz, nx + fuzz, length.out = ncl + 1L)
         structure(split(i, cut(i, breaks)), names = NULL)
     }
 }
@@ -164,57 +165,94 @@ splitRows <- function(x, ncl)
 splitCols <- function(x, ncl)
     lapply(splitIndices(ncol(x), ncl), function(i) x[, i, drop=FALSE])
 
-parLapply <- function(cl = NULL, X, fun, ...)
-    do.call(c,
-            clusterApply(cl, x = splitList(X, length(cl)),
-                         fun = lapply, fun, ...),
-            quote = TRUE)
+#internal
+staticNChunks <- function(nelems, nnodes, chunk.size) {
+    if (is.null(chunk.size) || chunk.size <= 0)
+        nnodes
+    else
+        max(1, ceiling(nelems / chunk.size))
+}
 
-parLapplyLB <- function(cl = NULL, X, fun, ...)
-    do.call(c,
-            clusterApplyLB(cl, x = splitList(X, length(cl)),
-                           fun = lapply, fun, ...),
-            quote = TRUE)
+#internal
+dynamicNChunks <- function(nelems, nnodes, chunk.size) {
+    if (is.null(chunk.size))
+        2 * nnodes
+    else if (chunk.size <= 0)
+        nelems
+    else
+        max(1, ceiling(nelems / chunk.size))
+}
 
-parRapply <- function(cl = NULL, x, FUN, ...)
+parLapply <- function(cl = NULL, X, fun, ..., chunk.size = NULL)
+{
+    cl <- defaultCluster(cl)
+    nchunks <- staticNChunks(length(X), length(cl), chunk.size)
     do.call(c,
-            clusterApply(cl = cl, x = splitRows(x, length(cl)),
+            clusterApply(cl = cl, x = splitList(X, nchunks),
+                         fun = lapply, FUN = fun, ...),
+            quote = TRUE)
+}
+
+parLapplyLB <- function(cl = NULL, X, fun, ..., chunk.size = NULL)
+{
+    cl <- defaultCluster(cl)
+    nchunks <- dynamicNChunks(length(X), length(cl), chunk.size)
+    do.call(c,
+            clusterApplyLB(cl = cl, x = splitList(X, nchunks),
+                           fun = lapply, FUN = fun, ...),
+            quote = TRUE)
+}
+
+parRapply <- function(cl = NULL, x, FUN, ..., chunk.size = NULL)
+{
+    cl <- defaultCluster(cl)
+    nchunks <- staticNChunks(nrow(x), length(cl), chunk.size)
+    do.call(c,
+            clusterApply(cl = cl, x = splitRows(x, nchunks),
                          fun = apply, MARGIN = 1L, FUN = FUN, ...),
             quote = TRUE)
+}
 
-parCapply <- function(cl = NULL, x, FUN, ...)
+parCapply <- function(cl = NULL, x, FUN, ..., chunk.size = NULL) {
+    cl <- defaultCluster(cl)
+    nchunks <- staticNChunks(ncol(x), length(cl), chunk.size)
     do.call(c,
-            clusterApply(cl = cl, x = splitCols(x, length(cl)),
+            clusterApply(cl = cl, x = splitCols(x, nchunks),
                          fun = apply, MARGIN = 2L, FUN = FUN, ...),
             quote = TRUE)
+}
 
 
 parSapply <-
-    function (cl = NULL, X, FUN, ..., simplify = TRUE, USE.NAMES = TRUE)
+    function (cl = NULL, X, FUN, ..., simplify = TRUE, USE.NAMES = TRUE,
+              chunk.size = NULL)
 {
     FUN <- match.fun(FUN) # should this be done on worker?
-    answer <- parLapply(cl, X = as.list(X), fun = FUN, ...)
+    answer <- parLapply(cl = cl, X = as.list(X), fun = FUN, ...,
+                        chunk.size = chunk.size)
     if(USE.NAMES && is.character(X) && is.null(names(answer)))
 	names(answer) <- X
-    if(!identical(simplify, FALSE) && length(answer))
+    if(!isFALSE(simplify) && length(answer))
 	simplify2array(answer, higher = (simplify == "array"))
     else answer
 }
 
 parSapplyLB <-
-    function (cl = NULL, X, FUN, ..., simplify = TRUE, USE.NAMES = TRUE)
+    function (cl = NULL, X, FUN, ..., simplify = TRUE, USE.NAMES = TRUE,
+              chunk.size = NULL)
 {
     FUN <- match.fun(FUN) # should this be done on worker?
-    answer <- parLapplyLB(cl, X = as.list(X), fun = FUN, ...)
+    answer <- parLapplyLB(cl = cl, X = as.list(X), fun = FUN, ...,
+                          chunk.size = chunk.size)
     if(USE.NAMES && is.character(X) && is.null(names(answer)))
 	names(answer) <- X
-    if(!identical(simplify, FALSE) && length(answer))
+    if(!isFALSE(simplify) && length(answer))
 	simplify2array(answer, higher = (simplify == "array"))
     else answer
 }
 
 
-parApply <- function(cl = NULL, X, MARGIN, FUN, ...)
+parApply <- function(cl = NULL, X, MARGIN, FUN, ..., chunk.size = NULL)
 {
     cl <- defaultCluster(cl) # initial sanity check
     FUN <- match.fun(FUN) # should this be done on worker?
@@ -236,14 +274,14 @@ parApply <- function(cl = NULL, X, MARGIN, FUN, ...)
         if(is.null(dnn <- names(dn))) # names(NULL) is NULL
            stop("'X' must have named dimnames")
         MARGIN <- match(MARGIN, dnn)
-        if (any(is.na(MARGIN)))
+        if (anyNA(MARGIN))
             stop("not all elements of 'MARGIN' are names of dimensions")
     }
     s.call <- ds[-MARGIN]
     s.ans  <- ds[MARGIN]
     d.call <- d[-MARGIN]
     d.ans  <- d[MARGIN]
-    dn.call<- dn[-MARGIN]
+    dn.call <- dn[-MARGIN]
     dn.ans <- dn[MARGIN]
     ## dimnames(X) <- NULL
 
@@ -269,7 +307,8 @@ parApply <- function(cl = NULL, X, MARGIN, FUN, ...)
         lapply(seq_len(d2), function(i) newX[,i])
     } else
         lapply(seq_len(d2), function(i) array(newX[,i], d.call, dn.call))
-    ans <- parLapply(cl = cl, X = arglist, fun = FUN, ...)
+    ans <- parLapply(cl = cl, X = arglist, fun = FUN, ...,
+                     chunk.size = chunk.size)
 
     ## answer dims and dimnames
 
@@ -278,7 +317,7 @@ parApply <- function(cl = NULL, X, MARGIN, FUN, ...)
 
     ans.names <- names(ans[[1L]])
     if(!ans.list)
-	ans.list <- any(unlist(lapply(ans, length)) != l.ans)
+	ans.list <- any(lengths(ans) != l.ans)
     if(!ans.list && length(ans.names)) {
         all.same <- vapply(ans, function(x) identical(names(x), ans.names), NA)
         if (!all(all.same)) ans.names <- NULL

@@ -1,5 +1,7 @@
 #  File src/library/parallel/R/unix/pvec.R
-#  Part of the R package, http://www.R-project.org
+#  Part of the R package, https://www.R-project.org
+#
+#  Copyright (C) 1995-2017 The R Core Team
 #
 #  This program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -12,7 +14,7 @@
 #  GNU General Public License for more details.
 #
 #  A copy of the GNU General Public License is available at
-#  http://www.r-project.org/Licenses/
+#  https://www.R-project.org/Licenses/
 
 ### Derived from multicore version 0.1-6 by Simon Urbanek
 
@@ -21,10 +23,10 @@ pvec <- function(v, FUN, ..., mc.set.seed = TRUE, mc.silent = FALSE,
 {
     if (!is.vector(v)) stop("'v' must be a vector")
 
-    env <- parent.frame()
     cores <- as.integer(mc.cores)
     if(cores < 1L) stop("'mc.cores' must be >= 1")
     if(cores == 1L) return(FUN(v, ...))
+    .check_ncores(cores)
 
     if(mc.set.seed) mc.reset.stream()
 
@@ -40,20 +42,8 @@ pvec <- function(v, FUN, ..., mc.set.seed = TRUE, mc.silent = FALSE,
         lapply(seq_len(cores), function(ix) v[si[ix]:se[ix]])
     }
     jobs <- NULL
-    cleanup <- function() {
-        ## kill children if cleanup is requested
-        if (length(jobs) && mc.cleanup) {
-            ## first take care of uncollected children
-            mccollect(children(jobs), FALSE)
-            mckill(children(jobs),
-                   if (is.integer(mc.cleanup)) mc.cleanup else 15L)
-            mccollect(children(jobs))
-        }
-        if (length(jobs)) {
-            ## just in case there are zombies
-            mccollect(children(jobs), FALSE)
-        }
-    }
+    ## all processes created from now on will be terminated by cleanup
+    prepareCleanup()
     on.exit(cleanup())
     FUN <- match.fun(FUN)
     ## may have more cores than tasks ....

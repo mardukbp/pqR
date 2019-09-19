@@ -1,9 +1,7 @@
 % File src/library/parallel/man/unix/children.Rd
-% Part of the R package, http://www.R-project.org
-% Copyright 2009-11 R Core Development Team
+% Part of the R package, https://www.R-project.org
+% Copyright 2009-2016 R Core Team
 % Distributed under GPL 2 or later
-
-\newcommand{\CRANpkg}{\href{http://CRAN.R-project.org/package=#1}{\pkg{#1}}}
 
 \name{mcchildren}
 \alias{children}
@@ -57,8 +55,9 @@ mckill(process, signal = 2L)
 }
 \details{
   \code{children} returns currently active children.
- 
-  \code{readChild} reads data from a given child process.
+
+  \code{readChild} reads data (sent by \code{sendMaster}) from a given
+  child process.
 
   \code{selectChildren} checks children for available data.
 
@@ -70,9 +69,9 @@ mckill(process, signal = 2L)
   will also be echoed on the standard output of the master process
   (unless disabled).  The function is vector-compatible, so you can
   specify \code{child} as a list or a vector of process IDs.
-  
+
   \code{sendMaster} sends data from the child to the master process.
-  
+
   \code{mckill} sends a signal to a child process: it is equivalent to
   \code{\link{pskill}} in package \pkg{tools}.
 }
@@ -87,24 +86,29 @@ mckill(process, signal = 2L)
   \code{readChildren}).
 
   \code{selectChildren} returns \code{TRUE} is the timeout was reached,
-  \code{FALSE} if an error occurred (e.g. if the master process was
+  \code{FALSE} if an error occurred (e.g., if the master process was
   interrupted) or an integer vector of process IDs with children that
   have data available, or \code{NULL} if there are no children.
 
   \code{sendChildStdin} returns a vector of \code{TRUE} values (one for
   each member of \code{child}) or throws an error.
-  
+
   \code{sendMaster} returns \code{TRUE} or throws an error.
-  
+
   \code{mckill} returns \code{TRUE}.
 }
 \author{
   Simon Urbanek and R Core.
 
-  Derived from the \CRANpkg{multicore} package.
+  Derived from the \pkg{multicore} package formerly on \acronym{CRAN}.
 }
 \section{Warning}{
-  This is a very low-level API for expert use only.
+  This is a very low-level interface for expert use only: it not
+  regarded as part of the \R API and subject to change without notice.
+
+  \code{sendMaster}, \code{readChild} and \code{sendChildStdin} did not
+  support long vectors prior to \R 3.4.0 and so were limited to
+  \eqn{2^{31} - 1}{2^31 - 1} bytes (and still are on 32-bit platforms).
 }
 \seealso{
   \code{\link{mcfork}}, \code{\link{sendMaster}}, \code{\link{mcparallel}}

@@ -1,5 +1,7 @@
 #  File src/library/parallel/R/snowSOCK.R
-#  Part of the R package, http://www.R-project.org
+#  Part of the R package, https://www.R-project.org
+#
+#  Copyright (C) 1995-2019 The R Core Team
 #
 #  This program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -12,7 +14,7 @@
 #  GNU General Public License for more details.
 #
 #  A copy of the GNU General Public License is available at
-#  http://www.r-project.org/Licenses/
+#  https://www.R-project.org/Licenses/
 
 ## Derived from snow 0.3-6 by Luke Tierney
 ## Uses solely Rscript, and a function in the package rather than scripts.
@@ -29,25 +31,32 @@ newPSOCKnode <- function(machine = "localhost", ...,
     master <- if (machine == "localhost") "localhost"
     else getClusterOption("master", options)
     port <- getClusterOption("port", options)
+    setup_timeout <- getClusterOption("setup_timeout", options)
     manual <- getClusterOption("manual", options)
     timeout <- getClusterOption("timeout", options)
     methods <- getClusterOption("methods", options)
     useXDR <- getClusterOption("useXDR", options)
 
     ## build the local command for starting the worker
-    env <- paste("MASTER=", master,
+    env <- paste0("MASTER=", master,
                  " PORT=", port,
-                 " OUT=", outfile,
+                 " OUT=", shQuote(outfile),
+                 " SETUPTIMEOUT=", setup_timeout,
                  " TIMEOUT=", timeout,
-                 " METHODS=", methods,
-                 " XDR=", useXDR,
-                 sep="")
+                 " XDR=", useXDR)
     arg <- "parallel:::.slaveRSOCK()"
     rscript <- if (getClusterOption("homogeneous", options)) {
         shQuote(getClusterOption("rscript", options))
     } else "Rscript"
+    rscript_args <- getClusterOption("rscript_args", options)
+    if(methods) rscript_args <-c("--default-packages=datasets,utils,grDevices,graphics,stats,methods",  rscript_args)
 
-    cmd <- paste(rscript, "-e", shQuote(arg), env)
+    ## in principle we should quote these,
+    ## but the current possible values do not need quoting
+    cmd <- if(length(rscript_args))
+        paste(rscript, paste(rscript_args, collapse = " "),
+              "-e", shQuote(arg), env)
+    else paste(rscript, "-e", shQuote(arg), env)
 
     ## We do redirection of connections at R level once the process is
     ## running.  We could instead do it at C level here, at least on
@@ -58,7 +67,7 @@ newPSOCKnode <- function(machine = "localhost", ...,
 
     if (manual) {
         cat("Manually start worker on", machine, "with\n    ", cmd, "\n")
-        flush.console()
+        utils::flush.console()
     } else {
         ## add the remote shell command if needed
         if (machine != "localhost") {
@@ -107,13 +116,18 @@ recvOneData.SOCKcluster <- function(cl)
         ready <- socketSelect(socklist)
         if (length(ready) > 0) break;
     }
-    n <- which(ready)[1L]  # may need rotation or some such for fairness
+    n <- which.max(ready) # may need rotation or some such for fairness
     list(node = n, value = unserialize(socklist[[n]]))
 }
 
 makePSOCKcluster <- function(names, ...)
 {
-    if (is.numeric(names)) names <- rep('localhost', names[1])
+    if (is.numeric(names)) {
+        names <- as.integer(names[1L])
+        if(is.na(names) || names < 1L) stop("numeric 'names' must be >= 1")
+        names <- rep('localhost', names)
+    }
+    .check_ncores(length(names))
     options <- addClusterOptions(defaultClusterOptions, list(...))
     cl <- vector("list", length(names))
     for (i in seq_along(cl))
@@ -126,11 +140,10 @@ print.SOCKcluster <- function(x, ...)
 {
     nc <- length(x)
     hosts <- unique(sapply(x, "[[", "host"))
-    msg <- if (length(hosts) > 1L)
-        gettextf("socket cluster with %d nodes on hosts %s", nc,
-                 paste(sQuote(hosts), collapse = ", "))
-    else
-        gettextf("socket cluster with %d nodes on host %s", nc, sQuote(hosts))
+    msg <- sprintf(ngettext(length(hosts),
+                            "socket cluster with %d nodes on host %s",
+                            "socket cluster with %d nodes on hosts %s"),
+                   nc, paste(sQuote(hosts), collapse = ", "))
     cat(msg, "\n", sep = "")
     invisible(x)
 }
@@ -148,22 +161,40 @@ print.SOCKnode <- print.SOCK0node <- function(x, ...)
 
 .slaveRSOCK <- function()
 {
-    makeSOCKmaster <- function(master, port, timeout, useXDR)
+    makeSOCKmaster <- function(master, port, setup_timeout, timeout, useXDR)
     {
         port <- as.integer(port)
-        ## maybe use `try' and sleep/retry if first time fails?
-        con <- socketConnection(master, port = port, blocking = TRUE,
-                                open = "a+b", timeout = timeout)
+        timeout <- as.integer(timeout)
+        stopifnot(setup_timeout >= 0)
+
+        ## Retry scheme parameters (do these need to be customizable?)
+        retryDelay <- 0.1     # 0.1 second initial delay before retrying
+        retryScale <- 1.5     # 50% increase of delay at each retry
+         
+        ## Retry multiple times in case the master is not yet ready
+        t0 <- Sys.time()
+        repeat {
+            con <- tryCatch({
+                socketConnection(master, port = port, blocking = TRUE,
+                                 open = "a+b", timeout = timeout)
+            }, error = identity)
+            if (inherits(con, "connection")) break
+            if (difftime(Sys.time(), t0, units="secs") > setup_timeout) break
+            Sys.sleep(retryDelay)
+            retryDelay <- retryScale * retryDelay
+        }
+        if (inherits(con, "error")) stop(con)
         structure(list(con = con),
                   class = if(useXDR) "SOCKnode" else "SOCK0node")
     }
 
     ## set defaults in case run manually without args.
-    master <- "localhost"
-    port <- 10187 # no point in getting option on worker.
+    master <- "localhost" # hostname of master process
+    port <- NA_integer_   # no point in getting option on worker
     outfile <- Sys.getenv("R_SNOW_OUTFILE") # defaults to ""
-    methods <- TRUE
-    useXDR <- TRUE
+    setup_timeout <- 120  # retry setup for 2 minutes before failing
+    timeout <- 2592000L   # wait 30 days for new cmds before failing
+    useXDR <- TRUE        # binary serialization
 
     for (a in commandArgs(TRUE)) {
         ## Or use strsplit?
@@ -174,12 +205,12 @@ print.SOCKnode <- print.SOCK0node <- function(x, ...)
                MASTER = {master <- value},
                PORT = {port <- value},
                OUT = {outfile <- value},
+               SETUPTIMEOUT = {setup_timeout <- as.numeric(value)},
                TIMEOUT = {timeout <- value},
-               METHODS = {methods <- value},
                XDR = {useXDR <- as.logical(value)})
     }
+    if (is.na(port)) stop("PORT must be specified")
 
-    if(as.logical(methods)) library("methods") ## because Rscript does not load methods by default
     ## We should not need to attach parallel, as we are running in the namespace.
 
     sinkWorkerOutput(outfile)
@@ -187,5 +218,5 @@ print.SOCKnode <- print.SOCK0node <- function(x, ...)
                    Sys.getpid(), paste(master, port, sep = ":"),
                    format(Sys.time(), "%H:%M:%OS3"))
     cat(msg)
-    slaveLoop(makeSOCKmaster(master, port, timeout, useXDR))
+    slaveLoop(makeSOCKmaster(master, port, setup_timeout, timeout, useXDR))
 }

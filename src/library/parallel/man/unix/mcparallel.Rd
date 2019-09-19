@@ -1,9 +1,7 @@
 % File src/library/parallel/man/unix/mcparallel.Rd
-% Part of the R package, http://www.R-project.org
-% Copyright 2009-11 R Core Development Team
+% Part of the R package, https://www.R-project.org
+% Copyright 2009-2018 R Core Team
 % Distributed under GPL 2 or later
-
-\newcommand{\CRANpkg}{\href{http://CRAN.R-project.org/package=#1}{\pkg{#1}}}
 
 \name{mcparallel}
 \alias{mccollect}
@@ -12,25 +10,42 @@
 \title{Evaluate an \R Expression Asynchronously in a Separate Process}
 \description{
   These functions are based on forking and so are not available on Windows.
-  
+
   \code{mcparallel} starts a parallel \R process which evaluates the
   given expression.
 
   \code{mccollect} collects results from one or more parallel processes.
 }
 \usage{
-mcparallel(expr, name, mc.set.seed = TRUE, silent = FALSE)
+mcparallel(expr, name, mc.set.seed = TRUE, silent = FALSE,
+           mc.affinity = NULL, mc.interactive = FALSE,
+	   detached = FALSE)
 
 mccollect(jobs, wait = TRUE, timeout = 0, intermediate = FALSE)
 }
 \arguments{
   \item{expr}{expression to evaluate (do \emph{not} use any on-screen
-    devices or GUI elements in this code).}
+    devices or GUI elements in this code, see \code{\link{mcfork}} for
+    the inadvisability of using \code{mcparallel} with GUI front-ends
+    and multi-threaded libraries).  Raw vectors are reserved for
+    internal use and cannot be returned, but the expression may evaluate
+    e.g. to a list holding a raw vector. \code{NULL} should not be returned
+    because it is used by \code{mccollect} to signal an error. }
   \item{name}{an optional name (character vector of length one) that can
     be associated with the job.}
   \item{mc.set.seed}{logical: see section \sQuote{Random numbers}.}
   \item{silent}{if set to \code{TRUE} then all output on stdout will be
     suppressed (stderr is not affected).}
+  \item{mc.affinity}{either a numeric vector specifying CPUs to restrict
+    the child process to (1-based) or \code{NULL} to not modify the CPU
+    affinity}
+  \item{mc.interactive}{logical, if \code{TRUE} or \code{FALSE} then the
+    child process will be set as interactive or non-interactive
+    respectively. If \code{NA} then the child process will inherit the
+    interactive flag from the parent.}
+  \item{detached}{logical, if \code{TRUE} then the job is detached from
+    the current session and cannot deliver any results back - it is used
+    for the code side-effect only.}
   \item{jobs}{list of jobs (or a single job) to collect results
     for.  Alternatively \code{jobs} can also be an integer vector of
     process IDs.  If omitted \code{collect} will wait for all currently
@@ -48,7 +63,7 @@ mccollect(jobs, wait = TRUE, timeout = 0, intermediate = FALSE)
   \code{mcparallel} evaluates the \code{expr} expression in parallel to
   the current \R process.  Everything is shared read-only (or in fact
   copy-on-write) between the parallel process and the current process,
-  i.e. no side-effects of the expression affect the main process.  The
+  i.e.\sspace{}no side-effects of the expression affect the main process.  The
   result of the parallel execution can be collected using
   \code{mccollect} function.
 
@@ -67,6 +82,24 @@ mccollect(jobs, wait = TRUE, timeout = 0, intermediate = FALSE)
   them correctly.  \code{mccollect} will return \code{NULL} for a
   terminating job that has sent its results already after which the
   job is no longer available.
+
+  Jobs are identified by process IDs (even when referred to as job objects),
+  which are reused by the operating system.  Detached jobs created by
+  \code{mcparallel} can thus never be safely referred to by their process
+  IDs nor job objects.  Non-detached jobs are guaranteed to exist until
+  collected by \code{mccollect}, even if crashed or terminated by a signal. 
+  Once collected by \code{mccollect}, a job is regarded as detached, and
+  thus must no longer be referred to by its process ID nor its job object. 
+  With \code{wait = TRUE}, all jobs passed to \code{mccollect} are
+  collected.  With \code{wait = FALSE}, the collected jobs are given as
+  names of the result vector, and thus in subsequent calls to
+  \code{mccollect} these jobs must be excluded. Job objects should be used
+  in preference of process IDs whenever accepted by the API.
+
+  The \code{mc.affinity} parameter can be used to try to restrict
+  the child process to specific CPUs. The availability and the extent of
+  this feature is system-dependent (e.g., some systems will only
+  consider the CPU count, others will ignore it completely).
 }
 \value{
   \code{mcparallel} returns an object of the class \code{"parallelJob"}
@@ -91,7 +124,7 @@ mccollect(jobs, wait = TRUE, timeout = 0, intermediate = FALSE)
   uses the RNG: this is pretty much guaranteed to give a different
   random-number stream from the current session and any other child
   process.
-  
+
   The behaviour with \code{mc.set.seed = TRUE} is different only if
   \code{\link{RNGkind}("L'Ecuyer-CMRG")} has been selected.  Then each
   time a child is forked it is given the next stream (see
@@ -103,18 +136,18 @@ mccollect(jobs, wait = TRUE, timeout = 0, intermediate = FALSE)
 }
 
 \note{
-  Package \CRANpkg{multicore} also exported functions \code{collect} and
-  \code{parallel}.  These names are easily masked (for example package
-  \CRANpkg{lattice} also has a function \code{parallel}) and they are not
-  supplied in this package.
+    Prior to \R 3.4.0 and on a 32-bit platform, the \link{serialize}d
+  result from each forked process is limited to \eqn{2^{31} - 1}{2^31 -
+    1} bytes.  (Returning very large results via serialization is
+  inefficient and should be avoided.)
 }
 
 
 \author{
   Simon Urbanek and R Core.
-  
-  Derived from the \CRANpkg{multicore} package (but with different
-  handling of the RNG stream).
+
+  Derived from the \pkg{multicore} package formerly on
+  \acronym{CRAN}. (but with different handling of the RNG stream).
 }
 \seealso{
   \code{\link{pvec}}, \code{\link{mclapply}}
@@ -125,10 +158,13 @@ q <- mcparallel(1:20)
 # wait for both jobs to finish and collect all results
 res <- mccollect(list(p, q))
 
+## IGNORE_RDIFF_BEGIN
+## reports process ids, so not reproducible
 p <- mcparallel(1:10)
-mccollect(p, wait=FALSE, 10) # will retrieve the result (since it's fast)
-mccollect(p, wait=FALSE)     # will signal the job as terminating
-mccollect(p, wait=FALSE)     # there is no longer such a job
+mccollect(p, wait = FALSE, 10) # will retrieve the result (since it's fast)
+mccollect(p, wait = FALSE)     # will signal the job as terminating
+mccollect(p, wait = FALSE)     # there is no longer such a job
+## IGNORE_RDIFF_END
 
 \dontshow{set.seed(123, "L'Ecuyer"); mc.reset.stream()}
 # a naive parallel lapply can be created using mcparallel alone:

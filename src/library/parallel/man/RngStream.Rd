@@ -1,9 +1,7 @@
 % File src/library/parallel/man/RngStream.Rd
-% Part of the R package, http://www.R-project.org
-% Copyright 2011 R Core Development Team
+% Part of the R package, https://www.R-project.org
+% Copyright 2011-2018 R Core Team
 % Distributed under GPL 2 or later
-
-\newcommand{\CRANpkg}{\href{http://CRAN.R-project.org/package=#1}{\pkg{#1}}}
 
 \name{RNGstreams}
 \alias{nextRNGStream}
@@ -59,27 +57,31 @@ mc.reset.stream()
   they are set from the current seed of the master process: after
   selecting the L'Ecuyer generator).
 #ifdef unix
-  
+
   Calling \code{mc.reset.stream()} after setting the L'Ecuyer random
   number generator and seed makes runs from
   \code{\link{mcparallel}(mc.set.seed = TRUE)} reproducible.  This is
   done internally in \code{\link{mclapply}} and \code{\link{pvec}}.
   (Note that it does not set the seed in the master process, so does not
   affect the fallback-to-serial versions of these functions.)
-#endif  
+#endif
 }
 \value{
   For \code{nextRNGStream} and \code{nextRNGSubStream},
   a value which can be assigned to \code{.Random.seed}.
 }
 \references{
-  L'Ecuyer, P. (1999) Good parameters and implementations for combined
-  multiple recursive random number generators.  \emph{Operations
-  Research} \bold{47}, 159--164.
-  
-  L'Ecuyer, P., Simard, R.,  Chen, E. J. and Kelton, W. D. (2002)
+  L'Ecuyer, P. (1999).
+  Good parameters and implementations for combined multiple recursive
+  random number generators.
+  \emph{Operations Research}, \bold{47}, 159--164.
+  \doi{10.1287/opre.47.1.159}.
+
+  L'Ecuyer, P., Simard, R.,  Chen, E. J. and Kelton, W. D. (2002).
   An object-oriented random-number package with many long streams
-  and substreams.  \emph{Operations Research} \bold{50} 1073--5.
+  and substreams.
+  \emph{Operations Research}, \bold{50}, 1073--1075.
+  \doi{10.1287/opre.50.6.1073.358}.
 }
 \author{
   Brian Ripley

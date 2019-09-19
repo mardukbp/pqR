@@ -1,9 +1,7 @@
 % File src/library/parallel/man/unix/mcfork.Rd
-% Part of the R package, http://www.R-project.org
-% Copyright 2009-11 R Core Development Team
+% Part of the R package, https://www.R-project.org
+% Copyright 2009-2018 R Core Team
 % Distributed under GPL 2 or later
-
-\newcommand{\CRANpkg}{\href{http://CRAN.R-project.org/package=#1}{\pkg{#1}}}
 
 \name{mcfork}
 \alias{mcfork}
@@ -12,18 +10,21 @@
 \description{
   These are low-level functions, not available on Windows, and not
   exported from the namespace.
-  
+
   \code{mcfork} creates a new child process as a copy of the current \R process.
- 
+
   \code{mcexit} closes the current child process, informing the master
   process as necessary.
 }
 \usage{
-mcfork()
+mcfork(estranged = FALSE)
 
 mcexit(exit.code = 0L, send = NULL)
 }
 \arguments{
+  \item{estranged}{logical, if \code{TRUE} then the new process has
+    no ties to the parent process, will not show in the list of
+    children and will not be killed on exit.}
   \item{exit.code}{process exit code.  By convention \code{0L} signifies
     a clean exit, \code{1L} an error.}
   \item{send}{if not \code{NULL} send this data before exiting
@@ -62,10 +63,13 @@ mcexit(exit.code = 0L, send = NULL)
 \value{
   \code{mcfork} returns an object of the class \code{"childProcess"} to
   the master and of class \code{"masterProcess"} to the child: both the
-  classes inherit from class \code{"process"}.  These are lists with
-  components \code{pid} (the process id of the \emph{other} process) and
-  a vector \code{fd} of the two file descriptor numbers for ends in the
-  current process of the inter-process pipes.
+  classes inherit from class \code{"process"}.  If \code{estranged} is
+  set to \code{TRUE} then the child process will be of the class
+  \code{"estrangedProcess"} and cannot communicate with the master
+  process nor will it show up on the list of children. These are lists
+  with components \code{pid} (the process id of the \emph{other}
+  process) and a vector \code{fd} of the two file descriptor numbers
+  for ends in the current process of the inter-process pipes.
 
   \code{mcexit} never returns.
 }
@@ -77,17 +81,36 @@ mcexit(exit.code = 0L, send = NULL)
   because it leads to several processes sharing the same GUI which will
   likely cause chaos (and possibly crashes).  Child processes should
   never use on-screen graphics devices.  Some precautions have been
-  taken to make this usable in \command{R.app} on Mac OS X, but users of
+  taken to make this usable in \command{R.app} on macOS, but users of
   third-party front-ends should consult their documentation.
+
+  This can also apply to other connections (e.g., to an X server) created
+  before forking, and to files opened by e.g.\sspace{}graphics devices.
+
+  Note that \pkg{tcltk} counts as a GUI for these purposes since
+  \command{Tcl} runs an event loop.  That event loop is inhibited in a
+  child process but there could still be problems with Tk graphical
+  connections.
+
+  It is \emph{strongly discouraged} to use \code{mcfork} and the
+  higher-level functions in any multi-threaded R process (with additional
+  threads created by a third-party library or package).  Such use can lead
+  to deadlocks or crashes, because the child process created by
+  \code{mcfork} may not be able to access resources locked in the parent or
+  may see an inconsistent version of global data (\code{mcfork} runs system
+  call \code{fork} without \code{exec}).
+
+  If in doubt, it is safer to use a non-FORK cluster (see
+  \code{\link{makeCluster}}, \code{\link{clusterApply}}).
 }
 
 \author{
   Simon Urbanek and R Core.
 
-  Derived from the \CRANpkg{multicore} package.
+  Derived from the \pkg{multicore} package formerly on \acronym{CRAN}.
 }
 \section{Warning}{
-  This is a very low-level API for expert use only. 
+  This is a very low-level API for expert use only.
 }
 \seealso{
   \code{\link{mcparallel}}, \code{\link{sendMaster}}
@@ -95,12 +118,12 @@ mcexit(exit.code = 0L, send = NULL)
 % The results here involve a random PID.
 \examples{\donttest{
 ## This will work when run as an example, but not when pasted in.
-p <- mcfork()
+p <- parallel:::mcfork()
 if (inherits(p, "masterProcess")) {
     cat("I'm a child! ", Sys.getpid(), "\n")
-    mcexit(,"I was a child")
+    parallel:::mcexit(,"I was a child")
 }
 cat("I'm the master\n")
-unserialize(readChildren(1.5))
+unserialize(parallel:::readChildren(1.5))
 }}
 \keyword{interface}

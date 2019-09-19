@@ -1,7 +1,6 @@
 % File src/library/parallel/man/windows/mcdummies.Rd
-% Part of the R package, http://www.R-project.org
-% Copyright 2009-11 R Core Development Team
-% Modifications for pqR Copyright (c) 2016 Radford M. Neal.
+% Part of the R package, https://www.R-project.org
+% Copyright 2009-2014 R Core Team
 % Distributed under GPL 2 or later
 
 \name{mclapply}
@@ -18,11 +17,11 @@
 \usage{
 mclapply(X, FUN, ..., mc.preschedule = TRUE, mc.set.seed = TRUE,
          mc.silent = FALSE, mc.cores = 1L,
-         mc.cleanup = TRUE, mc.allow.recursive = TRUE)
+         mc.cleanup = TRUE, mc.allow.recursive = TRUE, affinity.list = NULL)
 
 mcmapply(FUN, ..., MoreArgs = NULL, SIMPLIFY = TRUE, USE.NAMES = TRUE,
         mc.preschedule = TRUE, mc.set.seed = TRUE,
-        mc.silent = FALSE, mc.cores = 1L, mc.cleanup = TRUE)
+        mc.silent = FALSE, mc.cores = 1L, mc.cleanup = TRUE, affinity.list = NULL)
 
 mcMap(f, ...)
 
@@ -41,9 +40,9 @@ pvec(v, FUN, ..., mc.set.seed = TRUE, mc.silent = FALSE,
      \code{FUN}.  For \code{mcmapply} and \code{mcMap}, vector or list
      inputs: see \code{\link{mapply}}.}
   \item{MoreArgs, SIMPLIFY, USE.NAMES}{see \code{\link{mapply}}.}
-  \item{mc.preschedule, mc.set.seed, mc.silent, mc.cleanup, mc.allow.recursive}{
+  \item{mc.preschedule, mc.set.seed, mc.silent, mc.cleanup, mc.allow.recursive, affinity.list}{
     Ignored on Windows.}
-  \item{mc.cores}{The number of cores to use, i.e. at most how many
+  \item{mc.cores}{The number of cores to use, i.e.\sspace{}at most how many
     child processes will be run simultaneously.   Must be exactly 1 on
     Windows (which uses the master process).}
 }

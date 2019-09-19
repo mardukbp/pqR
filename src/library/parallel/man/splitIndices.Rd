@@ -1,6 +1,6 @@
 % File src/library/parallel/man/splitIndices.Rd
-% Part of the R package, http://www.R-project.org
-% Copyright 2003-11 R Core Development Team
+% Part of the R package, https://www.R-project.org
+% Copyright 2003-2014 R Core Team
 % Distributed under GPL 2 or later
 
 \name{splitIndices}
@@ -10,7 +10,7 @@
 \description{
   This divides up \code{1:nx} into \code{ncl} lists of approximately
   equal size, as a way to allocate tasks to nodes in a cluster.
-  
+
   It is mainly for internal use, but some package authors have found it useful.
 }
 \usage{

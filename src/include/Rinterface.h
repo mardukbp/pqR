@@ -36,6 +36,12 @@ extern "C" {
 #include <R_ext/Boolean.h>
 #include <R_ext/RStartup.h>
 
+#if defined(__GNUC__) && __GNUC__ >= 3
+# define NORET __attribute__((noreturn))
+#else
+# define NORET
+#endif
+
 /* from Defn.h */
 /* this duplication will be removed in due course */
 

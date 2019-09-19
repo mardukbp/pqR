@@ -1252,6 +1252,7 @@ extern0 Rboolean known_to_be_utf8 INI_as(FALSE);
 # define copyMostAttribNoClass	Rf_copyMostAttribNoClass
 # define copyMostAttribNoTs	Rf_copyMostAttribNoTs
 # define CustomPrintValue	Rf_CustomPrintValue
+# define currentTime            Rf_currentTime
 # define DataFrameClass		Rf_DataFrameClass
 # define ddfindVar		Rf_ddfindVar
 # define deparse1		Rf_deparse1
@@ -1471,6 +1472,7 @@ void copyListMatrix(SEXP, SEXP, Rboolean);
 void copyMostAttribNoClass(SEXP, SEXP);
 void copyMostAttribNoTs(SEXP, SEXP);
 void CustomPrintValue(SEXP, SEXP);
+double currentTime(void);
 void DataFrameClass(SEXP);
 SEXP ddfindVar(SEXP, SEXP);
 SEXP deparse1(SEXP,Rboolean,int);
@@ -1744,22 +1746,23 @@ extern char *locale2charset(const char *);
 
 /* Localization */
 
-#ifdef ENABLE_NLS
-#include <libintl.h>
-#ifdef Win32
-#define _(String) libintl_gettext (String)
-#undef gettext /* needed for graphapp */
-#else
-#define _(String) gettext (String)
+#ifndef NO_NLS
+# ifdef ENABLE_NLS
+#  include <libintl.h>
+#  ifdef Win32
+#   define _(String) libintl_gettext (String)
+#   undef gettext /* needed for graphapp */
+#  else
+#   define _(String) gettext (String)
+#  endif
+#  define gettext_noop(String) String
+#  define N_(String) gettext_noop (String)
+#  else /* not NLS */
+#  define _(String) (String)
+#  define N_(String) String
+#  define ngettext(String, StringP, N) (N > 1 ? StringP: String)
+# endif
 #endif
-#define gettext_noop(String) String
-#define N_(String) gettext_noop (String)
-#else /* not NLS */
-#define _(String) (String)
-#define N_(String) String
-#define ngettext(String, StringP, N) (N > 1 ? StringP: String)
-#endif
-
 
 /* Macros for suspending interrupts: also in GraphicsDevice.h */
 #define BEGIN_SUSPEND_INTERRUPTS do { \

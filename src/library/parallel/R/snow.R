@@ -1,5 +1,7 @@
 #  File src/library/parallel/R/snow.R
-#  Part of the R package, http://www.R-project.org
+#  Part of the R package, https://www.R-project.org
+#
+#  Copyright (C) 1995-2018 The R Core Team
 #
 #  This program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -12,7 +14,7 @@
 #  GNU General Public License for more details.
 #
 #  A copy of the GNU General Public License is available at
-#  http://www.r-project.org/Licenses/
+#  https://www.R-project.org/Licenses/
 
 ## Derived from snow 0.3-6 by Luke Tierney
 
@@ -22,7 +24,8 @@ assign("default", NULL, envir = .reg)
 defaultCluster <- function(cl = NULL)
 {
     if(is.null(cl)) cl <- get("default", envir = .reg)
-    if(is.null(cl)) stop("no cluster supplied and none is registered")
+    if(is.null(cl)) stop("no cluster 'cl' supplied and none is registered")
+    checkCluster(cl)
     cl
 }
 
@@ -31,6 +34,10 @@ setDefaultCluster <- function(cl = NULL)
     if(!is.null(cl)) checkCluster(cl)
     assign("default", cl, envir = .reg)
 }
+
+getDefaultCluster <-
+function()
+    get("default", envir = .reg)
 
 #
 # Checking and subsetting
@@ -79,16 +86,28 @@ defaultClusterOptions <- NULL
 initDefaultClusterOptions <- function(libname)
 {
     rscript <- file.path(R.home("bin"), "Rscript")
-    port <- as.integer(Sys.getenv("R_PARALLEL_PORT"))
-    if (is.na(port)) port <- 10187
-    options <- list(port = port,
+    port <- Sys.getenv("R_PARALLEL_PORT")
+    port <- if (identical(port, "random")) NA else as.integer(port)
+    if (is.na(port)) {
+	seed <- .GlobalEnv$.Random.seed
+        ran1 <- sample.int(.Machine$integer.max - 1L, 1L) / .Machine$integer.max
+        port <- 11000 + 1000 * ((ran1 + unclass(Sys.time()) / 300) %% 1)
+	if(is.null(seed)) ## there was none, initially
+	    rm(    ".Random.seed",       envir = .GlobalEnv, inherits = FALSE)
+	else # reset
+	    assign(".Random.seed", seed, envir = .GlobalEnv, inherits = FALSE)
+    }
+    Sys.i <- Sys.info()
+    options <- list(port = as.integer(port),
+                    setup_timeout = 60 * 2,      # 2 minutes
                     timeout = 60 * 60 * 24 * 30, # 30 days
-                    master =  Sys.info()["nodename"],
+                    master = Sys.i[["nodename"]],
                     homogeneous = TRUE,
                     type = "PSOCK",
                     outfile = "/dev/null",
                     rscript = rscript,
-                    user = Sys.info()["user"],
+                    rscript_args = character(),
+                    user = Sys.i[["user"]],
                     rshcmd = "ssh",
                     manual = FALSE,
                     methods = TRUE,
@@ -99,7 +118,8 @@ initDefaultClusterOptions <- function(libname)
                     scriptdir = file.path(libname, "parallel"),
                     rprog = file.path(R.home("bin"), "R"),
                     snowlib = .libPaths()[1],
-                    useRscript = TRUE, useXDR = TRUE)
+                    useRscript = TRUE, # for use by snow clusters
+                    useXDR = TRUE)
     defaultClusterOptions <<- addClusterOptions(emptyenv(), options)
 }
 
@@ -128,12 +148,11 @@ makeCluster <-
     function (spec, type = getClusterOption("type"), ...)
 {
     switch(type,
-           PSOCK = makePSOCKcluster(spec, ...),
-           FORK = makeForkCluster(spec, ...),
-           SOCK = snow::makeSOCKcluster(spec, ...),
-           PVM = snow::makePVMcluster(spec, ...),
-           MPI = snow::makeMPIcluster(spec, ...),
-           NWS = snow::makeNWScluster(spec, ...),
+           PSOCK = makePSOCKcluster(names = spec, ...),
+           FORK = makeForkCluster(nnodes = spec, ...),
+           SOCK = snow::makeSOCKcluster(names = spec, ...),
+           MPI = snow::makeMPIcluster(count = spec, ...),
+           NWS = snow::makeNWScluster(names = spec, ...),
            stop("unknown cluster type"))
 }
 
@@ -156,6 +175,8 @@ stopCluster.default <- function(cl) for (n in cl) stopNode(n)
 sendCall <- function (con, fun, args, return = TRUE, tag = NULL)
 {
     timing <-  .snowTimingData$running()
+    if (timing)
+        start <- proc.time()[3L]
     postNode(con, "EXEC",
              list(fun = fun, args = args, return = return, tag = tag))
     if (timing)
@@ -230,19 +251,28 @@ closeNode.NWSnode <- function(node) snow::closeNode.NWSnode(node)
 
 recvData.MPInode <- function(node) snow::recvData.MPInode(node)
 recvData.NWSnode <- function(node) snow::recvData.NWSnode(node)
-recvData.PVMnode <- function(node) snow::recvData.PVMnode(node)
 
-recvOneData.MPIcluster <- function(cl) snow::recvOneData.MPIclusted(cl)
+recvOneData.MPIcluster <- function(cl) snow::recvOneData.MPIcluster(cl)
 recvOneData.NWScluster <- function(cl) snow::recvOneData.NWScluster(cl)
-recvOneData.PVMcluster <- function(cl) snow::recvOneData.PVMcluster(cl)
 
 sendData.MPInode <- function(node, data) snow::sendData.MPInode(node, data)
 sendData.NWSnode <- function(node, data) snow::sendData.NWSnode(node, data)
-sendData.PVMnode <- function(node, data) snow::sendData.PVMnode(node, data)
 
-stopCluster.MPIcluster <- function(cl) snow::stopCluster.MPIcluster(cl)
-stopCluster.NWScluster <- function(cl) snow::stopCluster.NWScluster(cl)
-stopCluster.PVMcluster <- function(cl) snow::stopCluster.PVMcluster(cl)
-stopCluster.spawnedMPIcluster <-
-    function(cl) snow::stopCluster.spawnedMPIcluster(cl)
+## these use NextMethod() so need copies.
+stopCluster.MPIcluster <- function(cl) {
+    NextMethod()
+    snow::setMPIcluster(NULL)
+}
+
+stopCluster.spawnedMPIcluster <- function(cl) {
+    comm <- 1
+    NextMethod()
+    Rmpi::mpi.comm.disconnect(comm)
+}
+
+stopCluster.NWScluster <- function(cl) {
+    NextMethod()
+    nws::nwsDeleteWs(cl[[1]]$wsServer, nws::nwsWsName(cl[[1]]$ws))
+    close(cl[[1]]$wsServer)
+}
 
